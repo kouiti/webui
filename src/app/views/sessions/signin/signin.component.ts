@@ -17,7 +17,7 @@ import { TranslateService } from '@ngx-translate/core';
 import globalHelptext from '../../../helptext/global-helptext';
 import productText from '../../../helptext/product';
 import helptext from '../../../helptext/topbar';
-import { Subscription } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 
 import { T } from '../../../translate-marker';
 import { WebSocketService } from '../../../services/ws.service';
@@ -27,6 +27,7 @@ import { CoreService } from 'app/core/services/core.service';
 import { ApiService } from 'app/core/services/api.service';
 import { AutofillMonitor } from '@angular/cdk/text-field';
 import { LocaleService } from 'app/services/locale.service';
+import { takeUntil } from 'rxjs/operators';
 @Component({
   selector: 'app-signin',
   templateUrl: './signin.component.html',
@@ -81,7 +82,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
   ha_status = false;
   tc_ip: string;
   protected tc_url: string;
-  private getProdType: Subscription;
+  onDestroy$ = new Subject();
 
   readonly ProductType = ProductType;
 
@@ -99,7 +100,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
       this.ha_status = true;
     }
     this.checkSystemType();
-    this.ws.call('truecommand.connected').subscribe((res) => {
+    this.ws.call('truecommand.connected').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res.connected) {
         this.tc_ip = res.truecommand_ip;
         this.tc_url = res.truecommand_url;
@@ -110,7 +111,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
 
   checkSystemType(): void {
     if (!this.logo_ready) {
-      this.getProdType = this.sysGeneralService.getProductType.subscribe((res) => {
+      this.sysGeneralService.getProductType.pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
         this.logo_ready = true;
         this.product_type = res as ProductType;
         if (this.interval) {
@@ -137,7 +138,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    this._autofill.monitor(this.usernameInput).subscribe(() => {
+    this._autofill.monitor(this.usernameInput).pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       if (!this.didSetFocus) {
         this.didSetFocus = true;
         this.usernameInput.nativeElement.focus();
@@ -146,7 +147,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
-    this.core.register({ observerClass: this, eventName: 'ThemeChanged' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'ThemeChanged' }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       if (this.router.url == '/sessions/signin' && evt.sender.userThemeLoaded == true) {
         this.redirect();
       }
@@ -162,7 +163,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
       this.loginToken();
     }
 
-    this.ws.call('user.has_root_password').subscribe((res) => {
+    this.ws.call('user.has_root_password').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.has_root_password = res;
     });
 
@@ -171,7 +172,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
       password2: new FormControl('', [Validators.required, matchOtherValidator('password')]),
     });
 
-    this.ws.call('auth.two_factor_auth').subscribe((res) => {
+    this.ws.call('auth.two_factor_auth').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.isTwoFactor = res;
     });
   }
@@ -183,11 +184,12 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.HAInterval) {
       clearInterval(this.HAInterval);
     }
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
     this.core.unregister({ observerClass: this });
     if (this.tokenObservable) {
       this.tokenObservable.unsubscribe();
     }
-    this.getProdType.unsubscribe();
   }
 
   loginToken(): void {
@@ -202,6 +204,7 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (middleware_token) {
       this.ws.login_token(middleware_token)
+        .pipe(takeUntil(this.onDestroy$))
         .subscribe((result) => {
           this.loginCallback(result);
         });
@@ -219,12 +222,13 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       this.ws.login_token(this.ws.token)
+        .pipe(takeUntil(this.onDestroy$))
         .subscribe((result) => { this.loginCallback(result); });
     }
   }
 
   checkBuildtime(): void {
-    this.ws.call('system.build_time').subscribe((buildTime) => {
+    this.ws.call('system.build_time').pipe(takeUntil(this.onDestroy$)).subscribe((buildTime) => {
       const buildtime = String(buildTime.$date);
       const previous_buildtime = window.localStorage.getItem('buildtime');
       if (buildtime !== previous_buildtime) {
@@ -256,16 +260,16 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
     if ((this.product_type.includes(ProductType.Enterprise) || this.product_type === ProductType.Scale)
       && !this.checking_status) {
       this.checking_status = true;
-      this.ws.call('failover.status').subscribe((res) => {
+      this.ws.call('failover.status').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
         this.failover_status = res;
         this.ha_info_ready = true;
         if (res !== 'SINGLE') {
-          this.ws.call('failover.get_ips').subscribe((ips) => {
+          this.ws.call('failover.get_ips').pipe(takeUntil(this.onDestroy$)).subscribe((ips) => {
             this.failover_ips = ips;
           }, (err) => {
             console.error(err);
           });
-          this.ws.call('failover.disabled_reasons').subscribe((reasons) => {
+          this.ws.call('failover.disabled_reasons').pipe(takeUntil(this.onDestroy$)).subscribe((reasons) => {
             this.checking_status = false;
             this.ha_disabled_reasons = reasons;
             this.show_reasons = false;
@@ -324,17 +328,22 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (this.isTwoFactor) {
       this.ws.login(this.signinData.username, this.signinData.password, this.signinData.otp)
+        .pipe(takeUntil(this.onDestroy$))
         .subscribe((result) => { this.loginCallback(result); });
     } else {
       this.ws.login(this.signinData.username, this.signinData.password)
+        .pipe(takeUntil(this.onDestroy$))
         .subscribe((result) => { this.loginCallback(result); });
     }
   }
 
   setpassword(): void {
-    this.ws.call('user.set_root_password', [this.password.value]).subscribe(
+    this.ws.call('user.set_root_password', [this.password.value]).pipe(
+      takeUntil(this.onDestroy$),
+    ).subscribe(
       () => {
         this.ws.login('root', this.password.value)
+          .pipe(takeUntil(this.onDestroy$))
           .subscribe((result) => { this.loginCallback(result); });
       },
     );
@@ -368,7 +377,9 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
 
   successLogin(): void {
     this.snackBar.dismiss();
-    this.tokenObservable = this.ws.call('auth.generate_token', [300]).subscribe((token) => {
+    this.tokenObservable = this.ws.call('auth.generate_token', [300]).pipe(
+      takeUntil(this.onDestroy$),
+    ).subscribe((token) => {
       if (!token) {
         return;
       }
@@ -392,17 +403,15 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
       message = T('Token expired, please log back in.');
       this.ws.token = null;
     }
-    this.translate.get('close').subscribe((ok: string) => {
-      this.translate.get(message).subscribe((res: string) => {
-        this.snackBar.open(res, ok, { duration: 4000 });
-      });
-    });
+    const closeString = this.translate.instant('close');
+    const messageString = this.translate.instant(message);
+    this.snackBar.open(messageString, closeString, { duration: 4000 });
   }
 
   onGoToLegacy(): void {
     this.dialogService.confirm(T('Warning'),
       globalHelptext.legacyUIWarning,
-      true, T('Continue to Legacy UI')).subscribe((res: boolean) => {
+      true, T('Continue to Legacy UI')).pipe(takeUntil(this.onDestroy$)).subscribe((res: boolean) => {
       if (res) {
         window.location.href = '/legacy/';
       }
@@ -419,7 +428,9 @@ export class SigninComponent implements OnInit, OnDestroy, AfterViewInit {
       message: helptext.tcDialog.message,
       is_html: true,
       confirmBtnMsg: helptext.tcDialog.confirmBtnMsg,
-    }).subscribe((res) => {
+    }).pipe(
+      takeUntil(this.onDestroy$),
+    ).subscribe((res) => {
       if (res) {
         window.open(this.tc_url);
       }

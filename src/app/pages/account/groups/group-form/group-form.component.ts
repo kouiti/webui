@@ -1,22 +1,24 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { Validators } from '@angular/forms';
 
 import * as _ from 'lodash';
-import helptext from '../../../../helptext/account/groups';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
-import { WebSocketService, UserService } from '../../../../services';
+import helptext from 'app/helptext/account/groups';
+import { WebSocketService, UserService } from 'app/services';
 import { ModalService } from 'app/services/modal.service';
-import { FieldConfig } from '../../../common/entity/entity-form/models/field-config.interface';
-import { FieldSet } from '../../../common/entity/entity-form/models/fieldset.interface';
-import { forbiddenValues } from '../../../common/entity/entity-form/validators/forbidden-values-validation';
+import { FieldConfig } from 'app/pages/common/entity/entity-form/models/field-config.interface';
+import { FieldSet } from 'app/pages/common/entity/entity-form/models/fieldset.interface';
+import { forbiddenValues } from 'app/pages/common/entity/entity-form/validators/forbidden-values-validation';
 import { FormConfiguration } from 'app/interfaces/entity-form.interface';
 
 @Component({
   selector: 'app-group-form',
   template: '<entity-form [conf]="this"></entity-form>',
 })
-export class GroupFormComponent implements FormConfiguration {
+export class GroupFormComponent implements FormConfiguration, OnDestroy {
   isEntity = true;
   protected namesInUse: string[] = [];
   queryCall: 'group.query' = 'group.query';
@@ -26,6 +28,7 @@ export class GroupFormComponent implements FormConfiguration {
   title: string;
   protected isOneColumnForm = true;
   fieldConfig: FieldConfig[] = [];
+  onDestroy$ = new Subject();
 
   fieldSetDisplay = 'default';
   fieldSets: FieldSet[] = [
@@ -93,7 +96,7 @@ export class GroupFormComponent implements FormConfiguration {
   }
 
   getNamesInUse(currentName?: string): void {
-    this.ws.call('group.query').subscribe((groups) => {
+    this.ws.call('group.query').pipe(takeUntil(this.onDestroy$)).subscribe((groups) => {
       if (currentName) {
         _.remove(groups, (group) => group.group == currentName);
       }
@@ -113,7 +116,7 @@ export class GroupFormComponent implements FormConfiguration {
     } else {
       this.title = helptext.title_add;
       this.getNamesInUse();
-      this.ws.call('group.get_next_gid').subscribe((res) => {
+      this.ws.call('group.get_next_gid').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
         entityForm.formGroup.controls['gid'].setValue(res);
       });
     }
@@ -121,5 +124,10 @@ export class GroupFormComponent implements FormConfiguration {
 
   afterSubmit(): void {
     this.modalService.refreshTable();
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }

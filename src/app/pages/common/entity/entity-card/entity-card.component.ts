@@ -1,10 +1,10 @@
 import {
-  Component, OnInit, Input, Output, EventEmitter, TemplateRef,
+  Component, OnInit, Input, Output, EventEmitter, TemplateRef, OnDestroy,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiMethod } from 'app/interfaces/api-directory.interface';
 
-import { Subscription } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 
 import { iXObject } from 'app/core/classes/ix-object';
 import { ServiceStatus } from 'app/enums/service-status.enum';
@@ -12,6 +12,7 @@ import { RestService } from 'app/services/rest.service';
 import { WebSocketService } from 'app/services/ws.service';
 import { DialogService } from 'app/services/dialog.service';
 import { AppLoaderService } from 'app/services/app-loader/app-loader.service';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'entity-card',
@@ -19,7 +20,7 @@ import { AppLoaderService } from 'app/services/app-loader/app-loader.service';
   styleUrls: ['./entity-card.component.scss'],
   providers: [DialogService],
 })
-export class EntityCardComponent extends iXObject implements OnInit {
+export class EntityCardComponent extends iXObject implements OnInit, OnDestroy {
   @Input('conf') conf: any;
   @Input() width: string;
   @Input() height: string;
@@ -44,6 +45,7 @@ export class EntityCardComponent extends iXObject implements OnInit {
     sorting: { columns: this.columns },
   };
   protected loaderOpen = false;
+  onDestroy$ = new Subject();
 
   constructor(
     protected rest: RestService,
@@ -73,6 +75,11 @@ export class EntityCardComponent extends iXObject implements OnInit {
     }
   }
 
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
+  }
+
   toggle(row: any): void {
     let rpc: string;
 
@@ -82,7 +89,7 @@ export class EntityCardComponent extends iXObject implements OnInit {
       rpc = this.conf.toggleStop;
     }
 
-    this.busy = this.ws.call(rpc as ApiMethod, [row.id]).subscribe((res) => {
+    this.busy = this.ws.call(rpc as ApiMethod, [row.id]).pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res) {
         row[this.conf.toggleProp] = ServiceStatus.Running;
       } else {

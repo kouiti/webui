@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import {
   Router, NavigationEnd, NavigationCancel, ActivatedRoute,
@@ -22,16 +22,19 @@ import { ChartDataUtilsService } from 'app/core/services/chart-data-utils.servic
 import { customSvgIcons } from 'app/core/classes/custom-icons';
 
 import productText from './helptext/product';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
 })
-export class AppComponent {
+export class AppComponent implements OnDestroy {
   appTitle = 'TrueNAS';
   protected accountUserResource = 'account/users/1';
   protected user: any;
   product_type = '';
+  onDestroy$ = new Subject();
 
   constructor(public title: Title,
     private router: Router,
@@ -69,7 +72,7 @@ export class AppComponent {
         path = 'assets/images/truenas_' + cachedType + '_ondark_favicon.png';
       }
     } else {
-      this.sysGeneralService.getProductType.subscribe((res) => {
+      this.sysGeneralService.getProductType.pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
         path = 'assets/images/truenas_' + res.toLowerCase() + '_favicon.png';
         if (darkScheme) {
           path = 'assets/images/truenas_' + res.toLowerCase() + '_ondark_favicon.png';
@@ -82,7 +85,7 @@ export class AppComponent {
       document.body.className += ' safari-platform';
     }
 
-    router.events.subscribe((s) => {
+    router.events.pipe(takeUntil(this.onDestroy$)).subscribe((s) => {
       // save currenturl
       if (s instanceof NavigationEnd) {
         if (this.ws.loggedIn && s.url != '/sessions/signin') {
@@ -137,12 +140,17 @@ export class AppComponent {
 
   private globalPreviewControl(): void {
     const snackBarRef = this.snackBar.open('Custom theme Global Preview engaged', 'Back to form');
-    snackBarRef.onAction().subscribe(() => {
+    snackBarRef.onAction().pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       this.router.navigate(['ui-preferences', 'create-theme']);
     });
 
     if (this.router.url === '/ui-preferences/create-theme' || this.router.url === '/ui-preferences/edit-theme') {
       snackBarRef.dismiss();
     }
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }

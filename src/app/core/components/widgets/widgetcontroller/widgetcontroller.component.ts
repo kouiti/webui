@@ -1,5 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter,
+  Component, Input, Output, EventEmitter, OnDestroy,
 } from '@angular/core';
 import { MediaObserver } from '@angular/flex-layout';
 
@@ -13,6 +13,8 @@ import { EmptyConfig } from 'app/pages/common/entity/entity-empty/entity-empty.c
 import { ToolbarConfig } from 'app/pages/common/entity/entity-toolbar/models/control-config.interface';
 
 import { T } from '../../../../translate-marker';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 export interface DashConfigItem {
   name: string; // Shown in UI fields
@@ -27,7 +29,7 @@ export interface DashConfigItem {
   templateUrl: './widgetcontroller.component.html',
   styleUrls: ['./widgetcontroller.component.scss'],
 })
-export class WidgetControllerComponent extends WidgetComponent {
+export class WidgetControllerComponent extends WidgetComponent implements OnDestroy {
   @Input() dashState: DashConfigItem[] = [];
   @Input() renderedWidgets?: number[] = [];
   @Input() hiddenWidgets?: number[] = [];
@@ -41,17 +43,20 @@ export class WidgetControllerComponent extends WidgetComponent {
   widgetColorCssVar = 'var(--accent)';
   configurable = false;
   screenType = 'Desktop'; // Desktop || Mobile
+  onDestroy$ = new Subject();
 
   constructor(public router: Router, public translate: TranslateService, public mediaObserver: MediaObserver) {
     super(translate);
 
-    mediaObserver.media$.subscribe((evt) => {
+    mediaObserver.media$.pipe(takeUntil(this.onDestroy$)).subscribe((evt) => {
       const st = evt.mqAlias == 'xs' ? 'Mobile' : 'Desktop';
       this.screenType = st;
     });
   }
 
   ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
     this.core.unregister({ observerClass: this });
   }
 

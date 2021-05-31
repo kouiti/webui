@@ -35,6 +35,7 @@ import { TruecommandComponent } from '../dialog/truecommand/truecommand.componen
 import { ResilverProgressDialogComponent } from '../dialog/resilver-progress/resilver-progress.component';
 import { matchOtherValidator } from 'app/pages/common/entity/entity-form/validators/password-validation';
 import { EntityJobState } from 'app/enums/entity-job-state.enum';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'topbar',
@@ -93,6 +94,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   protected isTcStatusOpened = false;
   protected tcStatusDialogRef: MatDialogRef<TruecommandComponent>;
   tcStatus: any;
+  onDestroy$ = new Subject();
 
   readonly FailoverDisabledReason = FailoverDisabledReason;
 
@@ -112,11 +114,11 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
     private layoutService: LayoutService,
   ) {
     super();
-    this.sysGenService.updateRunningNoticeSent.subscribe(() => {
+    this.sysGenService.updateRunningNoticeSent.pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       this.updateNotificationSent = true;
     });
 
-    mediaObserver.media$.subscribe((evt) => {
+    mediaObserver.media$.pipe(takeUntil(this.onDestroy$)).subscribe((evt) => {
       this.screenSize = evt.mqAlias;
     });
   }
@@ -125,7 +127,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
     if (window.localStorage.getItem('product_type').includes(ProductType.Enterprise)) {
       this.checkEULA();
 
-      this.ws.call('failover.licensed').subscribe((is_ha) => {
+      this.ws.call('failover.licensed').pipe(takeUntil(this.onDestroy$)).subscribe((is_ha) => {
         this.is_ha = is_ha;
         this.is_ha ? window.localStorage.setItem('alias_ips', 'show') : window.localStorage.setItem('alias_ips', '0');
         this.getHAStatus();
@@ -135,7 +137,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       window.localStorage.setItem('alias_ips', '0');
       this.checkLegacyUISetting();
     }
-    this.ws.subscribe('core.get_jobs').subscribe((res) => {
+    this.ws.subscribe('core.get_jobs').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res && res.fields.method === 'update.update' || res.fields.method === 'failover.upgrade') {
         this.updateIsRunning = true;
         if (res.fields.state === EntityJobState.Failed || res.fields.state === EntityJobState.Aborted) {
@@ -145,7 +147,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
 
         // When update starts on HA system, listen for 'finish', then quit listening
         if (this.is_ha) {
-          this.updateIsDone = this.sysGenService.updateIsDone$.subscribe(() => {
+          this.updateIsDone = this.sysGenService.updateIsDone$.pipe(takeUntil(this.onDestroy$)).subscribe(() => {
             this.updateIsRunning = false;
             this.updateIsDone.unsubscribe();
           });
@@ -167,15 +169,15 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
     });
     const theme = this.themeService.currentTheme();
     this.currentTheme = theme.name;
-    this.core.register({ observerClass: this, eventName: 'ThemeListsChanged' }).subscribe(() => {
+    this.core.register({ observerClass: this, eventName: 'ThemeListsChanged' }).pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       this.themesMenu = this.themeService.themesMenu;
     });
 
-    this.ws.call(this.tc_queryCall).subscribe((res) => {
+    this.ws.call(this.tc_queryCall).pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.tcStatus = res;
       this.tcConnected = !!res.api_key;
     });
-    this.ws.subscribe(this.tc_queryCall).subscribe((res) => {
+    this.ws.subscribe(this.tc_queryCall).pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.tcStatus = res.fields;
       this.tcConnected = !!res.fields.api_key;
       if (this.isTcStatusOpened && this.tcStatusDialogRef) {
@@ -190,7 +192,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
         this.notifications.push(notificationAlert);
       }
     });
-    this.notificationsService.getNotifications().subscribe((notifications1) => {
+    this.notificationsService.getNotifications().pipe(takeUntil(this.onDestroy$)).subscribe((notifications1) => {
       this.notifications = [];
       notifications1.forEach((notificationAlert: NotificationAlert) => {
         if (notificationAlert.dismissed === false && notificationAlert.level !== 'INFO') {
@@ -201,7 +203,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
     this.checkNetworkChangesPending();
     this.checkNetworkCheckinWaiting();
     this.getDirServicesStatus();
-    this.core.register({ observerClass: this, eventName: 'NetworkInterfacesChanged' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'NetworkInterfacesChanged' }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       if (evt && evt.data.commit) {
         this.pendingNetworkChanges = false;
         this.checkNetworkCheckinWaiting();
@@ -215,7 +217,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       }
     });
 
-    this.ws.subscribe('zfs.pool.scan').subscribe((res) => {
+    this.ws.subscribe('zfs.pool.scan').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res && res.fields.scan.function.indexOf('RESILVER') > -1) {
         this.resilveringDetails = res.fields;
         this.showResilvering = true;
@@ -232,25 +234,25 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
     this.core.register({
       observerClass: this,
       eventName: 'SysInfo',
-    }).subscribe((evt: SysInfoEvent) => {
+    }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: SysInfoEvent) => {
       this.hostname = evt.data.hostname;
     });
 
-    this.getProductType = this.sysGenService.getProductType.subscribe((res) => {
+    this.getProductType = this.sysGenService.getProductType.pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.systemType = res;
     });
 
     this.core.emit({ name: 'SysInfoRequest', sender: this });
 
-    this.core.register({ observerClass: this, eventName: 'UserPreferences' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'UserPreferences' }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       this.preferencesHandler(evt);
     });
-    this.core.register({ observerClass: this, eventName: 'UserPreferencesReady' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'UserPreferencesReady' }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       this.preferencesHandler(evt);
     });
     this.core.emit({ name: 'UserPreferencesRequest', sender: this });
 
-    this.webSocketOnClose = this.ws.onCloseSubject.subscribe(() => {
+    this.webSocketOnClose = this.ws.onCloseSubject.pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       this.modalService.close('slide-in-form');
     });
   }
@@ -267,7 +269,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   }
 
   checkLegacyUISetting(): void {
-    this.getAdvancedConfig = this.sysGenService.getAdvancedConfig.subscribe((res) => {
+    this.getAdvancedConfig = this.sysGenService.getAdvancedConfig.pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res.legacy_ui) {
         this.exposeLegacyUI = res.legacy_ui;
         window.localStorage.setItem('exposeLegacyUI', res.legacy_ui);
@@ -279,6 +281,9 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
     if (typeof (this.interval) !== 'undefined') {
       clearInterval(this.interval);
     }
+
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
 
     this.ws.unsubscribe('failover.disabled_reasons');
 
@@ -336,7 +341,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       this.translate.instant('Shut down the system?'),
       false,
       this.translate.instant('Shut Down'),
-    ).subscribe((res: boolean) => {
+    ).pipe(takeUntil(this.onDestroy$)).subscribe((res: boolean) => {
       if (!res) {
         return;
       }
@@ -351,7 +356,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       this.translate.instant('Restart the system?'),
       false,
       this.translate.instant('Restart'),
-    ).subscribe((res: any) => {
+    ).pipe(takeUntil(this.onDestroy$)).subscribe((res: any) => {
       if (!res) {
         return;
       }
@@ -361,14 +366,14 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   }
 
   checkEULA(): void {
-    this.ws.call('truenas.is_eula_accepted').subscribe((isEulaAccepted) => {
+    this.ws.call('truenas.is_eula_accepted').pipe(takeUntil(this.onDestroy$)).subscribe((isEulaAccepted) => {
       if (!isEulaAccepted || window.localStorage.getItem('upgrading_status') === 'upgrading') {
-        this.ws.call('truenas.get_eula').subscribe((eula) => {
+        this.ws.call('truenas.get_eula').pipe(takeUntil(this.onDestroy$)).subscribe((eula) => {
           this.dialogService.confirm(T('End User License Agreement - TrueNAS'), eula, true,
-            T('I Agree'), false, null, '', null, null, true).subscribe((accept_eula: boolean) => {
+            T('I Agree'), false, null, '', null, null, true).pipe(takeUntil(this.onDestroy$)).subscribe((accept_eula: boolean) => {
             if (accept_eula) {
               window.localStorage.removeItem('upgrading_status');
-              this.ws.call('truenas.accept_eula').subscribe();
+              this.ws.call('truenas.accept_eula').pipe(takeUntil(this.onDestroy$)).subscribe();
             }
           });
         });
@@ -377,13 +382,13 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   }
 
   checkNetworkChangesPending(): void {
-    this.ws.call('interface.has_pending_changes').subscribe((hasPendingChanges) => {
+    this.ws.call('interface.has_pending_changes').pipe(takeUntil(this.onDestroy$)).subscribe((hasPendingChanges) => {
       this.pendingNetworkChanges = hasPendingChanges;
     });
   }
 
   checkNetworkCheckinWaiting(): void {
-    this.ws.call('interface.checkin_waiting').subscribe((res) => {
+    this.ws.call('interface.checkin_waiting').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res != null) {
         const seconds = res;
         if (seconds > 0 && this.checkin_remaining == null) {
@@ -419,11 +424,11 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
         network_interfaces_helptext.checkin_title,
         network_interfaces_helptext.pending_checkin_dialog_text,
         true, network_interfaces_helptext.checkin_button,
-      ).subscribe((res: boolean) => {
+      ).pipe(takeUntil(this.onDestroy$)).subscribe((res: boolean) => {
         if (res) {
           this.user_check_in_prompted = false;
           this.loader.open();
-          this.ws.call('interface.checkin').subscribe(() => {
+          this.ws.call('interface.checkin').pipe(takeUntil(this.onDestroy$)).subscribe(() => {
             this.core.emit({ name: 'NetworkInterfacesChanged', data: { commit: true, checkin: true }, sender: this });
             this.loader.close();
             this.dialogService.Info(
@@ -448,7 +453,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
         network_interfaces_helptext.pending_changes_title,
         network_interfaces_helptext.pending_changes_message,
         true, T('Continue'),
-      ).subscribe((res: boolean) => {
+      ).pipe(takeUntil(this.onDestroy$)).subscribe((res: boolean) => {
         if (res) {
           this.router.navigate(['/network']);
         }
@@ -463,7 +468,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   onGoToLegacy(): void {
     this.dialogService.confirm(T('Warning'),
       helptext.legacyUIWarning,
-      true, T('Continue to Legacy UI')).subscribe((res: boolean) => {
+      true, T('Continue to Legacy UI')).pipe(takeUntil(this.onDestroy$)).subscribe((res: boolean) => {
       if (res) {
         window.location.href = '/legacy/';
       }
@@ -486,7 +491,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       });
     }
 
-    this.taskDialogRef.afterClosed().subscribe(
+    this.taskDialogRef.afterClosed().pipe(takeUntil(this.onDestroy$)).subscribe(
       () => {
         this.isTaskMangerOpened = false;
       },
@@ -509,7 +514,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       });
     }
 
-    this.dirServicesMonitor.afterClosed().subscribe(
+    this.dirServicesMonitor.afterClosed().pipe(takeUntil(this.onDestroy$)).subscribe(
       () => {
         this.isDirServicesMonitorOpened = false;
       },
@@ -529,7 +534,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   }
 
   getHAStatus(): void {
-    this.core.register({ observerClass: this, eventName: 'HA_Status' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'HA_Status' }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       this.updateHAInfo(evt.data);
     });
   }
@@ -543,13 +548,13 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       ha_icon = 'warning';
       for (let i = 0; i < this.ha_disabled_reasons.length; i++) {
         const reason_text = helptext.ha_disabled_reasons[this.ha_disabled_reasons[i]];
-        this.translate.get(reason_text).subscribe(() => {
+        this.translate.get(reason_text).pipe(takeUntil(this.onDestroy$)).subscribe(() => {
           reasons = reasons + '<li>' + reason_text + '</li>\n';
         });
       }
     } else {
       ha_status = helptext.ha_status_text_enabled;
-      this.translate.get(helptext.ha_is_enabled).subscribe((ha_is_enabled) => {
+      this.translate.get(helptext.ha_is_enabled).pipe(takeUntil(this.onDestroy$)).subscribe((ha_is_enabled) => {
         reasons = reasons + '<li>' + ha_is_enabled + '</li>\n';
       });
     }
@@ -559,7 +564,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   }
 
   checkUpgradePending(): void {
-    this.ws.call('failover.upgrade_pending').subscribe((res) => {
+    this.ws.call('failover.upgrade_pending').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.pendingUpgradeChecked = true;
       this.upgradeWaitingToFinish = res;
       if (res) {
@@ -573,18 +578,18 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       T('Pending Upgrade'),
       T('There is an upgrade waiting to finish.'),
       true, T('Continue'),
-    ).subscribe((res: boolean) => {
+    ).pipe(takeUntil(this.onDestroy$)).subscribe((res: boolean) => {
       if (res) {
         this.dialogRef = this.dialog.open(EntityJobComponent, { data: { title: T('Update') }, disableClose: false });
         this.dialogRef.componentInstance.setCall('failover.upgrade_finish');
         this.dialogRef.componentInstance.disableProgressValue(true);
         this.dialogRef.componentInstance.submit();
-        this.dialogRef.componentInstance.success.subscribe((success: any) => {
+        this.dialogRef.componentInstance.success.pipe(takeUntil(this.onDestroy$)).subscribe((success: any) => {
           this.dialogRef.close(false);
           console.info('success', success);
           this.upgradeWaitingToFinish = false;
         });
-        this.dialogRef.componentInstance.failure.subscribe((failure: any) => {
+        this.dialogRef.componentInstance.failure.pipe(takeUntil(this.onDestroy$)).subscribe((failure: any) => {
           this.dialogService.errorReport(failure.error, failure.reason, failure.trace.formatted);
         });
       }
@@ -592,13 +597,13 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
   }
 
   getDirServicesStatus(): void {
-    this.ws.call('directoryservices.get_state').subscribe((res) => {
+    this.ws.call('directoryservices.get_state').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       for (const i in res) {
         this.dirServicesStatus.push(res[i]);
       }
       this.showDSIcon();
     });
-    this.ws.subscribe('directoryservices.status').subscribe((res) => {
+    this.ws.subscribe('directoryservices.status').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.dirServicesStatus = [];
       for (const i in res.fields) {
         this.dirServicesStatus.push(res.fields[i]);
@@ -694,10 +699,10 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
             icon: helptext.tcDeregisterDialog.icon,
             message: helptext.tcDeregisterDialog.message,
             confirmBtnMsg: helptext.tcDeregisterDialog.confirmBtnMsg,
-          }).subscribe((res) => {
+          }).pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
             if (res) {
               self.loader.open();
-              self.ws.call(self.tc_updateCall, [{ api_key: null, enabled: false }]).subscribe(
+              self.ws.call(self.tc_updateCall, [{ api_key: null, enabled: false }]).pipe(takeUntil(this.onDestroy$)).subscribe(
                 () => {
                   self.loader.close();
                   updateDialog.dialogRef.close();
@@ -736,7 +741,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       },
       customSubmit(entityDialog: EntityDialogComponent) {
         self.loader.open();
-        self.ws.call(self.tc_updateCall, [entityDialog.formValue]).subscribe(
+        self.ws.call(self.tc_updateCall, [entityDialog.formValue]).pipe(takeUntil(this.onDestroy$)).subscribe(
           () => {
             self.loader.close();
             entityDialog.dialogRef.close();
@@ -776,7 +781,7 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       });
     }
 
-    this.tcStatusDialogRef.afterClosed().subscribe(
+    this.tcStatusDialogRef.afterClosed().pipe(takeUntil(this.onDestroy$)).subscribe(
       () => {
         this.isTcStatusOpened = false;
       },
@@ -789,10 +794,10 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
       icon: helptext.stopTCConnectingDialog.icon,
       message: helptext.stopTCConnectingDialog.message,
       confirmBtnMsg: helptext.stopTCConnectingDialog.confirmBtnMsg,
-    }).subscribe((res) => {
+    }).pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res) {
         this.loader.open();
-        this.ws.call(this.tc_updateCall, [{ enabled: false }]).subscribe(
+        this.ws.call(this.tc_updateCall, [{ enabled: false }]).pipe(takeUntil(this.onDestroy$)).subscribe(
           () => {
             this.loader.close();
           },
@@ -843,10 +848,10 @@ export class TopbarComponent extends ViewControllerComponent implements OnInit, 
         const pwChange = entityDialog.formValue;
         delete pwChange.password_conf;
         entityDialog.dialogRef.close();
-        this.ws.call('auth.check_user', ['root', pwChange.curr_password]).subscribe((check) => {
+        this.ws.call('auth.check_user', ['root', pwChange.curr_password]).pipe(takeUntil(this.onDestroy$)).subscribe((check) => {
           if (check) {
             delete pwChange.curr_password;
-            this.ws.call('user.update', [1, pwChange]).subscribe(() => {
+            this.ws.call('user.update', [1, pwChange]).pipe(takeUntil(this.onDestroy$)).subscribe(() => {
               this.loader.close();
               this.dialogService.Info(T('Success'), helptext.changePasswordDialog.pw_updated, '300px', 'info', false);
             }, (res) => {

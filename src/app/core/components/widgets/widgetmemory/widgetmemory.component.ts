@@ -21,6 +21,7 @@ import { ViewChartBarComponent } from 'app/core/components/viewchartbar/viewchar
 import { TranslateService } from '@ngx-translate/core';
 
 import { T } from '../../../../translate-marker';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'widget-memory',
@@ -65,24 +66,27 @@ export class WidgetMemoryComponent extends WidgetComponent implements AfterViewI
   screenType = 'Desktop';
 
   private utils: ThemeUtils;
+  onDestroy$ = new Subject();
 
   constructor(public router: Router, public translate: TranslateService, private sanitizer: DomSanitizer, public mediaObserver: MediaObserver, private el: ElementRef) {
     super(translate);
 
     this.utils = new ThemeUtils();
 
-    mediaObserver.media$.subscribe((evt) => {
+    mediaObserver.media$.pipe(takeUntil(this.onDestroy$)).subscribe((evt) => {
       const st = evt.mqAlias == 'xs' ? 'Mobile' : 'Desktop';
       this.screenType = st;
     });
   }
 
   ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
     this.core.unregister({ observerClass: this });
   }
 
   ngAfterViewInit(): void {
-    this.data.subscribe((evt: CoreEvent) => {
+    this.data.pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       if (evt.name == 'MemoryStats') {
         if (evt.data.used) {
           this.setMemData(evt.data);

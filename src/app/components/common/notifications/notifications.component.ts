@@ -4,9 +4,10 @@ import {
 import { MatSidenav } from '@angular/material/sidenav';
 import { NotificationsService, NotificationAlert } from 'app/services/notifications.service';
 import { LocaleService } from 'app/services/locale.service';
-import { Subscription } from 'rxjs';
+import { Subject } from 'rxjs';
 import * as _ from 'lodash';
 import { Router } from '@angular/router';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-notifications',
@@ -19,14 +20,14 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   notifications: NotificationAlert[] = [];
   dismissedNotifications: NotificationAlert[] = [];
   ngDateFormat = 'yyyy-MM-dd HH:mm:ss';
-  dateFormatSubscription: Subscription;
+  onDestroy$ = new Subject();
 
   constructor(private router: Router, private notificationsService: NotificationsService, protected localeService: LocaleService) {
   }
 
   ngOnInit(): void {
     this.initData();
-    this.notificationsService.getNotifications().subscribe((notifications) => {
+    this.notificationsService.getNotifications().pipe(takeUntil(this.onDestroy$)).subscribe((notifications) => {
       this.notifications = [];
       this.dismissedNotifications = [];
 
@@ -43,7 +44,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
         });
       }, -1);
     });
-    this.dateFormatSubscription = this.localeService.dateTimeFormatChange$.subscribe(() => {
+    this.localeService.dateTimeFormatChange$.pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       this.ngDateFormat = `${this.localeService.getAngularFormat()}`;
     });
   }
@@ -82,10 +83,6 @@ export class NotificationsComponent implements OnInit, OnDestroy {
     this.notificationsService.restoreNotifications([notification]);
   }
 
-  ngOnDestroy(): void {
-    this.dateFormatSubscription.unsubscribe();
-  }
-
   closeNotificationsPanel(): void {
     this.notificPanel.close();
   }
@@ -93,5 +90,10 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   navigateTo(link: string[]): void {
     this.notificPanel.close();
     this.router.navigate(link);
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }

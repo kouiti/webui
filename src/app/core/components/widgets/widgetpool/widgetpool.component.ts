@@ -17,6 +17,8 @@ import {
   tween,
   styler,
 } from 'popmotion';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 interface Slide {
   name: string;
@@ -83,6 +85,7 @@ export class WidgetPoolComponent extends WidgetComponent implements AfterViewIni
   @ViewChild('empty', { static: false }) empty: TemplateRef<any>;
   templates: any;
   tpl = this.overview;
+  onDestroy$ = new Subject();
 
   // NAVIGATION
   currentSlide = '0';
@@ -201,6 +204,8 @@ export class WidgetPoolComponent extends WidgetComponent implements AfterViewIni
   }
 
   ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
     this.core.unregister({ observerClass: this });
   }
 
@@ -228,14 +233,14 @@ export class WidgetPoolComponent extends WidgetComponent implements AfterViewIni
 
     this.cdr.detectChanges();
 
-    this.core.register({ observerClass: this, eventName: 'MultipathData' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'MultipathData' }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       this.currentMultipathDetails = evt.data[0];
 
       const activeDisk = evt.data[0].children.filter((prop: any) => prop.status == 'ACTIVE');
       this.core.emit({ name: 'DisksRequest', data: [[['name', '=', activeDisk[0].name]]] });
     });
 
-    this.core.register({ observerClass: this, eventName: 'DisksData' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'DisksData' }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       const currentPath = (this.path as any)[this.currentSlideIndex] as Slide;
       const currentName = currentPath && currentPath.dataSource
         ? this.currentMultipathDetails

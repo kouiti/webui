@@ -5,6 +5,8 @@ import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dial
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { helptext_system_failover } from 'app/helptext/system/failover';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 interface DialogData {
   agreed: boolean;
@@ -19,6 +21,8 @@ interface DialogData {
 export class SimpleFailoverBtnComponent {
   @Input() color = 'default';
   @Input() disabled?: boolean = false;
+  onDestroy$ = new Subject();
+
   constructor(
     private dialog: MatDialog,
     protected matDialog: MatDialog,
@@ -32,11 +36,16 @@ export class SimpleFailoverBtnComponent {
       data: { agreed: true },
     });
 
-    dialogRef.afterClosed().subscribe((res) => {
+    dialogRef.afterClosed().pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res) {
         this.router.navigate(['/others/reboot']);
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }
 

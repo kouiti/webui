@@ -15,6 +15,8 @@ import {
   tween,
   styler,
 } from 'popmotion';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 interface NetTraffic {
   sent: string;
@@ -45,6 +47,7 @@ export class WidgetNicComponent extends WidgetComponent implements AfterViewInit
   @ViewChild('carouselparent', { static: false }) carouselParent: ElementRef;
   traffic: NetTraffic;
   currentSlide = '0';
+  onDestroy$ = new Subject();
 
   get currentSlideName(): string {
     return this.path[parseInt(this.currentSlide)].name;
@@ -89,6 +92,8 @@ export class WidgetNicComponent extends WidgetComponent implements AfterViewInit
   }
 
   ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
     this.core.emit({ name: 'StatsRemoveListener', data: { name: 'NIC', obj: this } });
     this.core.unregister({ observerClass: this });
   }
@@ -100,7 +105,7 @@ export class WidgetNicComponent extends WidgetComponent implements AfterViewInit
   }
 
   ngAfterViewInit(): void {
-    this.stats.subscribe((evt: CoreEvent) => {
+    this.stats.pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       if (evt.name == 'NetTraffic_' + this.nicState.name) {
         const sent: Converted = this.convert(evt.data.sent_bytes_rate);
         const received: Converted = this.convert(evt.data.received_bytes_rate);

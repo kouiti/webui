@@ -3,9 +3,10 @@ import {
   Component, OnInit, OnDestroy,
 } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
-import { Subscription } from 'rxjs';
+import { Subject } from 'rxjs';
 import { T } from '../../../../translate-marker';
 import { WebSocketService } from '../../../../services/ws.service';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-resilver-progress-dialog',
@@ -23,15 +24,15 @@ export class ResilverProgressDialogComponent implements OnInit, OnDestroy {
   title = T('Resilvering Status');
   description = T('Resilvering pool: ');
   statusLabel = T('Status: ');
-  protected subscription: Subscription;
   diskName: string;
+  onDestroy$ = new Subject();
 
   constructor(public dialogRef: MatDialogRef < ResilverProgressDialogComponent >,
     protected translate: TranslateService, protected ws: WebSocketService) {
   }
 
   ngOnInit(): void {
-    this.subscription = this.ws.subscribe('zfs.pool.scan').subscribe((res) => {
+    this.ws.subscribe('zfs.pool.scan').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       if (res && res.fields.scan.function.indexOf('RESILVER') > -1) {
         this.resilveringDetails = res.fields;
         this.diskName = this.resilveringDetails.name;
@@ -42,8 +43,7 @@ export class ResilverProgressDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-    }
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }

@@ -1,4 +1,6 @@
-import { Component, OnInit, Input } from '@angular/core';
+import {
+  Component, OnInit, Input, OnDestroy,
+} from '@angular/core';
 import {
   Router, NavigationEnd, ActivatedRoute,
 } from '@angular/router';
@@ -6,17 +8,19 @@ import { CoreEvent } from 'app/interfaces/events';
 import { ProductType } from '../../../enums/product-type.enum';
 import { RoutePartsService } from '../../../services/route-parts/route-parts.service';
 import { CoreService } from 'app/core/services/core.service';
-import { filter } from 'rxjs/operators';
+import { filter, takeUntil } from 'rxjs/operators';
 import { LocaleService } from 'app/services/locale.service';
+import { Subject } from 'rxjs';
 
 @Component({
   selector: 'app-breadcrumb',
   templateUrl: './breadcrumb.component.html',
   styleUrls: ['./breadcrumb.component.scss'],
 })
-export class BreadcrumbComponent implements OnInit {
+export class BreadcrumbComponent implements OnInit, OnDestroy {
   @Input() product_type: ProductType;
   copyrightYear = this.localeService.getCopyrightYearFromBuildTime();
+  onDestroy$ = new Subject();
 
   routeParts: any[];
   isEnabled = true;
@@ -46,7 +50,10 @@ export class BreadcrumbComponent implements OnInit {
 
     // only execute when routechange
     this.router.events
-      .pipe(filter((event) => event instanceof NavigationEnd))
+      .pipe(
+        takeUntil(this.onDestroy$),
+        filter((event) => event instanceof NavigationEnd),
+      )
       .subscribe(() => {
         this.routeParts = this.routePartsService.generateRouteParts(this.activeRoute.snapshot);
         // generate url from parts
@@ -66,7 +73,9 @@ export class BreadcrumbComponent implements OnInit {
       });
 
     // Pseudo routing events (for reports page)
-    this.core.register({ observerClass: this, eventName: 'PseudoRouteChange' }).subscribe((evt: CoreEvent) => {
+    this.core.register({ observerClass: this, eventName: 'PseudoRouteChange' }).pipe(
+      takeUntil(this.onDestroy$),
+    ).subscribe((evt: CoreEvent) => {
       this.routeParts = evt.data;
       // generate url from parts
       this.routeParts.map((item, i) => {
@@ -81,5 +90,10 @@ export class BreadcrumbComponent implements OnInit {
         return item;
       });
     });
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }

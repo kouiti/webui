@@ -13,10 +13,17 @@ module.exports = {
       "files": ["*.ts"],
       "parser": "@typescript-eslint/parser",
       "parserOptions": {
-        "createDefaultProgram": true
+        "createDefaultProgram": true,
+        "ecmaVersion": 2019,
+        "project": "./tsconfig.json",
+        "sourceType": "module",
       },
       "extends": [
         "airbnb-typescript/base",
+      ],
+      "plugins": [
+        "rxjs",
+        "rxjs-angular",
       ],
       "rules": {
         // TODO: Enable later when type information is available
@@ -108,6 +115,12 @@ module.exports = {
         "@typescript-eslint/no-unused-vars": "off",
         "unused-imports/no-unused-imports": "error",
         "unused-imports/no-unused-vars": ["error", { vars: "local", args: "after-used" }],
+
+        // RxJS Angular rules
+        "rxjs-angular/prefer-takeuntil": "error",
+
+        // RxJS rules
+        "rxjs/no-unsafe-takeuntil": "error",
       }
     },
     {
@@ -115,7 +128,7 @@ module.exports = {
       "parser": "@angular-eslint/template-parser",
       "plugins": [
         "@angular-eslint/template",
-        "unused-imports"
+        "unused-imports",
       ],
       "rules": {}
     }

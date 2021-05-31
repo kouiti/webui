@@ -23,6 +23,7 @@ import { ViewChartBarComponent } from 'app/core/components/viewchartbar/viewchar
 import { TranslateService } from '@ngx-translate/core';
 
 import { T } from '../../../../translate-marker';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'widget-cpu',
@@ -71,6 +72,7 @@ export class WidgetCpuComponent extends WidgetComponent implements AfterViewInit
   labels: string[] = [];
   protected currentTheme: any;
   private utils: ThemeUtils;
+  onDestroy$ = new Subject();
 
   constructor(
     router: Router,
@@ -82,7 +84,7 @@ export class WidgetCpuComponent extends WidgetComponent implements AfterViewInit
 
     this.utils = new ThemeUtils();
 
-    mediaObserver.media$.subscribe((evt) => {
+    mediaObserver.media$.pipe(takeUntil(this.onDestroy$)).subscribe((evt) => {
       const size = {
         width: evt.mqAlias == 'xs' ? 320 : 536,
         height: 140,
@@ -100,7 +102,7 @@ export class WidgetCpuComponent extends WidgetComponent implements AfterViewInit
     this.core.register({
       observerClass: this,
       eventName: 'SysInfo',
-    }).subscribe((evt: SysInfoEvent) => {
+    }).pipe(takeUntil(this.onDestroy$)).subscribe((evt: SysInfoEvent) => {
       this.threadCount = evt.data.cores;
       this.coreCount = evt.data.physical_cores;
       this.hyperthread = this.threadCount !== this.coreCount;
@@ -113,6 +115,8 @@ export class WidgetCpuComponent extends WidgetComponent implements AfterViewInit
   }
 
   ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
     this.core.unregister({ observerClass: this });
   }
 
@@ -120,7 +124,7 @@ export class WidgetCpuComponent extends WidgetComponent implements AfterViewInit
     this.core.register({
       observerClass: this,
       eventName: 'ThemeChanged',
-    }).subscribe(() => {
+    }).pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       d3.select('#grad1 .begin')
         .style('stop-color', this.getHighlightColor(0));
 
@@ -128,7 +132,7 @@ export class WidgetCpuComponent extends WidgetComponent implements AfterViewInit
         .style('stop-color', this.getHighlightColor(0.15));
     });
 
-    this.data.subscribe((evt: CoreEvent) => {
+    this.data.pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       if (evt.name !== 'CpuStats') {
         return;
       }

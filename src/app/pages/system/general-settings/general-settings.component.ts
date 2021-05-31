@@ -16,13 +16,14 @@ import { LocalizationFormComponent } from './localization-form/localization-form
 import { GuiFormComponent } from './gui-form/gui-form.component';
 import { NTPServerFormComponent } from './ntpservers/ntpserver-form/ntpserver-form.component';
 import { AppLoaderService } from '../../../services/app-loader/app-loader.service';
-import { Subscription, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import { EntityUtils } from '../../common/entity/utils';
 import { DialogFormConfiguration } from '../../common/entity/entity-dialog/dialog-form-configuration.interface';
 import { FieldConfig } from '../../common/entity/entity-form/models/field-config.interface';
 import { EntityJobComponent } from 'app/pages//common/entity/entity-job/entity-job.component';
 import { EntityToolbarComponent } from 'app/pages/common/entity/entity-toolbar/entity-toolbar.component';
 import { AdminLayoutComponent } from '../../../components/common/layouts/admin-layout/admin-layout.component';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-general-settings',
@@ -34,12 +35,10 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
   ntpTitle = helptext.ntpTitle;
   localeData: any;
   configData: any;
-  refreshCardData: Subscription;
   displayedColumns: any;
   dataSource: any;
-  refreshTable: Subscription;
-  getGenConfig: Subscription;
   formEvents: Subject<CoreEvent>;
+  onDestroy$ = new Subject();
 
   // Components included in this dashboard
   protected localizationComponent = new LocalizationFormComponent(this.language, this.ws, this.dialog, this.loader,
@@ -119,16 +118,16 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.getDataCardData();
-    this.refreshCardData = this.sysGeneralService.refreshSysGeneral$.subscribe(() => {
+    this.sysGeneralService.refreshSysGeneral$.pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       this.getDataCardData();
     });
     this.getNTPData();
-    this.refreshTable = this.modalService.refreshTable$.subscribe(() => {
+    this.modalService.refreshTable$.pipe(takeUntil(this.onDestroy$)).subscribe(() => {
       this.getNTPData();
     });
 
     this.formEvents = new Subject();
-    this.formEvents.subscribe((evt: CoreEvent) => {
+    this.formEvents.pipe(takeUntil(this.onDestroy$)).subscribe((evt: CoreEvent) => {
       switch (evt.data.configFiles.value) {
         case 'save_config':
           this.dialog.dialogForm(this.saveConfigFormConf);
@@ -168,7 +167,7 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
   }
 
   getDataCardData(): void {
-    this.getGenConfig = this.sysGeneralService.getGeneralConfig.subscribe((res) => {
+    this.sysGeneralService.getGeneralConfig.pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.configData = res;
       this.dataCards = [
         {
@@ -193,8 +192,8 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
         },
       ];
 
-      this.sysGeneralService.languageChoices().subscribe((languages) => {
-        this.sysGeneralService.kbdMapChoices().subscribe((mapchoices) => {
+      this.sysGeneralService.languageChoices().pipe(takeUntil(this.onDestroy$)).subscribe((languages) => {
+        this.sysGeneralService.kbdMapChoices().pipe(takeUntil(this.onDestroy$)).subscribe((mapchoices) => {
           const keyboardMap = mapchoices.find((x) => x.value === this.configData.kbdmap);
           this.localeData = {
             title: helptext.localeTitle,
@@ -234,7 +233,7 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
       false, helptext.deleteServer.message).subscribe((res: boolean) => {
       if (res) {
         this.loader.open();
-        this.ws.call('system.ntpserver.delete', [server.id]).subscribe(() => {
+        this.ws.call('system.ntpserver.delete', [server.id]).pipe(takeUntil(this.onDestroy$)).subscribe(() => {
           this.loader.close();
           this.getNTPData();
         }, (err) => {
@@ -246,7 +245,7 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
   }
 
   getNTPData(): void {
-    this.ws.call('system.ntpserver.query').subscribe((res) => {
+    this.ws.call('system.ntpserver.query').pipe(takeUntil(this.onDestroy$)).subscribe((res) => {
       this.dataSource = res;
       this.displayedColumns = ['address', 'burst', 'iburst', 'prefer', 'minpoll', 'maxpoll', 'actions'];
     });
@@ -255,7 +254,7 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
   saveConfigSubmit(entityDialog: any): void {
     parent = entityDialog.parent;
     entityDialog.loader.open();
-    (entityDialog.ws as WebSocketService).call('system.info', []).subscribe((systemInfo) => {
+    (entityDialog.ws as WebSocketService).call('system.info', []).pipe(takeUntil(this.onDestroy$)).subscribe((systemInfo) => {
       let fileName = '';
       let mimetype: string;
       if (systemInfo) {
@@ -272,10 +271,11 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
       }
 
       entityDialog.ws.call('core.download', ['config.save', [{ secretseed: entityDialog.formValue['secretseed'] }], fileName])
+        .pipe(takeUntil(this.onDestroy$))
         .subscribe(
           (download: any) => {
             const url = download[1];
-            entityDialog.parent.storage.streamDownloadFile(entityDialog.parent.http, url, fileName, mimetype).subscribe((file: Blob) => {
+            entityDialog.parent.storage.streamDownloadFile(entityDialog.parent.http, url, fileName, mimetype).pipe(takeUntil(this.onDestroy$)).subscribe((file: Blob) => {
               entityDialog.loader.close();
               entityDialog.dialogRef.close();
               entityDialog.parent.storage.downloadBlob(file, fileName);
@@ -335,8 +335,7 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.refreshCardData.unsubscribe();
-    this.refreshTable.unsubscribe();
-    this.getGenConfig.unsubscribe();
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }

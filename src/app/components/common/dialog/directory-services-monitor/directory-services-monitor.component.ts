@@ -1,9 +1,11 @@
-import { Component, OnInit } from '@angular/core';
+import { takeUntil } from 'rxjs/operators';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   animate, state, style, transition, trigger,
 } from '@angular/animations';
-import { WebSocketService } from '../../../../services';
+import { WebSocketService } from 'app/services';
+import { Subject } from 'rxjs';
 
 @Component({
   selector: 'app-directory-services-monitor',
@@ -18,10 +20,11 @@ import { WebSocketService } from '../../../../services';
     ]),
   ],
 })
-export class DirectoryServicesMonitorComponent implements OnInit {
+export class DirectoryServicesMonitorComponent implements OnInit, OnDestroy {
   displayedColumns: string[] = ['icon', 'name', 'state'];
   dataSource: any[] = [];
   showSpinner = false;
+  onDestroy$ = new Subject();
 
   constructor(private ws: WebSocketService, private router: Router) {}
 
@@ -32,7 +35,9 @@ export class DirectoryServicesMonitorComponent implements OnInit {
   getStatus(): void {
     const tempArray: any[] = [];
     this.showSpinner = true;
-    this.ws.call('directoryservices.get_state').subscribe((res) => {
+    this.ws.call('directoryservices.get_state').pipe(
+      takeUntil(this.onDestroy$),
+    ).subscribe((res) => {
       this.showSpinner = false;
       tempArray.push({ name: 'Active Directory', state: res.activedirectory, id: 'activedirectory' });
       tempArray.push({ name: 'LDAP', state: res.ldap, id: 'ldap' });
@@ -43,5 +48,10 @@ export class DirectoryServicesMonitorComponent implements OnInit {
 
   goTo(el: string): void {
     this.router.navigate([`/directoryservice/${el}`]);
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
   }
 }
